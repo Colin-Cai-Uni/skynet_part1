@@ -1,7 +1,7 @@
 import struct
 
 from Crypto.Cipher import XOR
-
+from Crypto.Cipher import ChaCha20
 from dh import create_dh_key, calculate_dh_secret
 
 class StealthConn(object):
@@ -28,8 +28,9 @@ class StealthConn(object):
             shared_hash = calculate_dh_secret(their_public_key, my_private_key)
             print("Shared hash: {}".format(shared_hash))
 
-        # Default XOR algorithm can only take a key of length 32
-        self.cipher = XOR.new(shared_hash[:4])
+        # Choose ChaCha20 cipher from the pycrypto library
+        # Since the shared key length is 256 bits from the calculate_dh_secret function, it meets the requirement for key length to use(which must be 32 bytes long)in ChaCha20 cipher 
+         self.cipher = ChaCha20.new(shared_hash)
 
     def send(self, data):
         if self.cipher:
