@@ -1,7 +1,7 @@
 import struct
 
-from Crypto.Cipher import XOR
-from Crypto.Cipher import ChaCha20
+from Crypto.Cipher import AES
+from Crypto import Random
 from dh import create_dh_key, calculate_dh_secret
 
 class StealthConn(object):
@@ -27,10 +27,11 @@ class StealthConn(object):
             # Obtain our shared secret
             shared_hash = calculate_dh_secret(their_public_key, my_private_key)
             print("Shared hash: {}".format(shared_hash))
-
-        # Choose ChaCha20 cipher from the pycrypto library
-        # Since the shared key length is 256 bits from the calculate_dh_secret function, it meets the requirement for key length to use(which must be 32 bytes long)in ChaCha20 cipher 
-         self.cipher = ChaCha20.new(shared_hash)
+        #Choose AES cipher    
+        #The shared key length can meet the requirement for key parameter in AES cipher
+        #Define a iv for AES cipher
+        iv = Random.new().read(AES.block_size)
+        self.cipher = AES.new(shared_hash, AES.MODE_CFB, iv)
 
     def send(self, data):
         if self.cipher:
