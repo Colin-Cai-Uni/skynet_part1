@@ -1,7 +1,7 @@
 import struct
 
-from Crypto.Cipher import XOR
-
+from Crypto.Cipher import AES
+from Crypto import Random
 from dh import create_dh_key, calculate_dh_secret
 
 class StealthConn(object):
@@ -29,9 +29,11 @@ class StealthConn(object):
             # Obtain our shared secret
             shared_hash = calculate_dh_secret(their_public_key, my_private_key)
             print("Shared hash: {}".format(shared_hash))
-
-        # Default XOR algorithm can only take a key of length 32
-        self.cipher = XOR.new(shared_hash[:4])
+        #Choose AES cipher    
+        #The shared key length can meet the requirement for key parameter in AES cipher
+        #Define a iv for AES cipher
+        iv = Random.new().read(AES.block_size)
+        self.cipher = AES.new(shared_hash, AES.MODE_CFB, iv)
 
     def send(self, data):
         if self.cipher:
