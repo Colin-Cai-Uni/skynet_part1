@@ -7,7 +7,8 @@ from dh import create_dh_key, calculate_dh_secret
 class StealthConn(object):
     def __init__(self, conn, client=False, server=False, verbose=False):
         self.conn = conn
-        self.cipher = None
+        ### TODO: Make sure that storing the shared hash in memory isn't too dangerous!
+        self.shared_hash = None
         self.client = client
         self.server = server
         self.verbose = verbose
@@ -25,17 +26,18 @@ class StealthConn(object):
             # Receive their public key
             their_public_key = int(self.recv())
             # Obtain our shared secret
-            shared_hash = calculate_dh_secret(their_public_key, my_private_key)
-            print("Shared hash: {}".format(shared_hash))
-        #Choose AES cipher    
-        #The shared key length can meet the requirement for key parameter in AES cipher
-        #Define a iv for AES cipher
-        iv = Random.new().read(AES.block_size)
-        self.cipher = AES.new(shared_hash, AES.MODE_CFB, iv)
+            self.shared_hash = calculate_dh_secret(their_public_key, my_private_key)
+            print("Shared hash: {}".format(self.shared_hash))
 
     def send(self, data):
-        if self.cipher:
-            encrypted_data = self.cipher.encrypt(data)
+        if self.shared_hash:
+            # Create an initialization vector for the AES
+            iv = Random.new().read(AES.block_size)
+            ### TODO: Verify that trunacting the shared hash doesn't compromise security
+            self.cipher = AES.new(self.shared_hash[:32], AES.MODE_CFB, iv)
+            # Prepends the initialization vector to the message
+            # it can be safely transmitted as cleartext so long as it is random
+            encrypted_data = iv + self.cipher.encrypt(data)
             if self.verbose:
                 print("Original data: {}".format(data))
                 print("Encrypted data: {}".format(repr(encrypted_data)))
@@ -55,8 +57,10 @@ class StealthConn(object):
         pkt_len = unpacked_contents[0]
 
         encrypted_data = self.conn.recv(pkt_len)
-        if self.cipher:
-            data = self.cipher.decrypt(encrypted_data)
+        if self.shared_hash:
+            # Decrypts the message using the given initialization vector
+            self.cipher = AES.new(self.shared_hash[:32], AES.MODE_CFB, encrypted_data[:16])
+            data = self.cipher.decrypt(encrypted_data[16:])
             if self.verbose:
                 print("Receiving packet of length {}".format(pkt_len))
                 print("Encrypted data: {}".format(repr(encrypted_data)))
