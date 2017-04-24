@@ -24,12 +24,14 @@ def create_dh_key():
     # Creates a Diffie-Hellman key
     # Returns (public, private)
     a = random.randint(0, int(2**8))
-    return (a, a)
+    g = 2 #obtained from MODP RFC 3526
+    Public_key = pow(g,a,prime)
+    return (a, Public_key)
 
 def calculate_dh_secret(their_public, my_private):
-    # Calculate the shared secret
-    shared_secret = their_public * my_private
-
+    # Calculate the shared 
+    shared_secret = pow(their_public,my_private,prime)cret
+    
     # Hash the value so that:
     # (a) There's no bias in the bits of the output
     #     (there may be bias if the shared secret is used raw)
