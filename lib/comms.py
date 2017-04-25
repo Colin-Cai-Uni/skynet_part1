@@ -1,7 +1,9 @@
 import struct
-
+import hmac
+import hashlib
 from Crypto.Cipher import AES
 from Crypto import Random
+from Crypto.Hash import SHA256
 from dh import create_dh_key, calculate_dh_secret
 
 class StealthConn(object):
@@ -27,18 +29,21 @@ class StealthConn(object):
             # Obtain our shared secret
             shared_hash = calculate_dh_secret(their_public_key, my_private_key)
             print("Shared hash: {}".format(shared_hash))
-        #Choose AES cipher    
-        #The shared key length can meet the requirement for key parameter in AES cipher
-        #Define a iv for AES cipher
-        iv = Random.new().read(AES.block_size)
-        self.cipher = AES.new(shared_hash, AES.MODE_CFB, iv)
 
     def send(self, data):
-        if self.cipher:
-            encrypted_data = self.cipher.encrypt(data)
+        if self.shared_hash:
+            # Create an initialization vector for the AES
+            iv = Random.new().read(AES.block_size)
+            ### TODO: Verify that trunacting the shared hash doesn't compromise security
+            self.cipher = AES.new(self.shared_hash[:32], AES.MODE_CFB, iv)
+            encrypted_data = iv + self.cipher.encrypt(data)
+            #Usw HMAC to ensure the authentication and intergrity
+            #Use SHA256 as the hash function
+            mac_data = hamc.new(self.shared_hash[:32], encrypted_data, hashlib.sha256).hexdigest()
             if self.verbose:
                 print("Original data: {}".format(data))
                 print("Encrypted data: {}".format(repr(encrypted_data)))
+                print("MAC data: {}".format(repr(mac_data)))
                 print("Sending packet of length {}".format(len(encrypted_data)))
         else:
             encrypted_data = data
@@ -47,24 +52,40 @@ class StealthConn(object):
         pkt_len = struct.pack('H', len(encrypted_data))
         self.conn.sendall(pkt_len)
         self.conn.sendall(encrypted_data)
+        # Encode the MAC data's length into an unsigned two byte int ('M')
+        pkt_mac_len = struct.pack('M', len(mac_data))
+        self.conn.sendall(pkt_mac_len)
+        self.conn.sendall(mac_data)
+        
 
     def recv(self):
         # Decode the data's length from an unsigned two byte int ('H')
         pkt_len_packed = self.conn.recv(struct.calcsize('H'))
         unpacked_contents = struct.unpack('H', pkt_len_packed)
         pkt_len = unpacked_contents[0]
-
         encrypted_data = self.conn.recv(pkt_len)
-        if self.cipher:
-            data = self.cipher.decrypt(encrypted_data)
-            if self.verbose:
-                print("Receiving packet of length {}".format(pkt_len))
-                print("Encrypted data: {}".format(repr(encrypted_data)))
-                print("Original data: {}".format(data))
-        else:
-            data = encrypted_data
-
+        # Decode the MAC data's length from an unsigned two byte int ('M')
+        pkt_mac_len_packed = self.conn.recv(struct.calcsize('M'))
+        unpacked_mac_contents = struct.unpack('M', pkt_mac_len_packed)
+        pkt_mac_len = unpacked_contents[0]
+        mac_data = self.conn.recv(pkt_mac_len)
+        if self.shared_hash:
+            # Decrypts the message using the given initialization vector
+            self.cipher = AES.new(self.shared_hash[:32], AES.MODE_CFB, encrypted_data[:16])
+            data = self.cipher.decrypt(encrypted_data[16:])
+            updated_mac_data = hamc.new(self.shared_hash[:32], encrypted_data, hashlib.sha256).hexdigest()
+            if hamc.compare_digest(mac_data, updated_mac_data):
+                if self.verbose:
+                    print("Receiving packet of length {}".format(pkt_len))
+                    print("Encrypted data: {}".format(repr(encrypted_data)))
+                    print("MAC data: {}".format(repr(updated_mac_data)))
+                    print("Original data: {}".format(data))
+                else:
+                    data = encrypted_data
+            else:
+                print("Auth error!")
         return data
+
 
     def close(self):
         self.conn.close()
