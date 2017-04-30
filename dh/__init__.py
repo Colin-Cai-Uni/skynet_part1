@@ -3,8 +3,6 @@ from Crypto.Random import random
 
 from lib.helpers import read_hex
 
-# Project TODO: Is this the best choice of prime? Why? Why not? Feel free to replace!
-
 # 3072 bit safe prime for Diffie-Hellman key exchange
 # obtained from RFC 3526
 raw_prime = """FFFFFFFF FFFFFFFF C90FDAA2 2168C234 C4C6628B 80DC1CD1
@@ -26,18 +24,17 @@ BBE11757 7A615D6C 770988C0 BAD946E2 08E24FA0 74E5AB31
 # Convert from the value supplied in the RFC to an integer
 prime = read_hex(raw_prime)
 
-# Project TODO: write the appropriate code to perform DH key exchange
-
 def create_dh_key():
     # Creates a Diffie-Hellman key
     # Returns (public, private)
     a = random.randint(2, prime - 2)
-    g = 2 #obtained from MODP RFC 3526
+    # generator value obtained from MODP 3072 RFC 3526
+    g = 2
     Public_key = pow(g,a,prime)
     return (Public_key, a)
 
 def calculate_dh_secret(their_public, my_private):
-    # Calculate the shared 
+    # Calculate the shared secret
     shared_secret = pow(their_public,my_private,prime)
     
     # Hash the value so that:
@@ -45,6 +42,5 @@ def calculate_dh_secret(their_public, my_private):
     #     (there may be bias if the shared secret is used raw)
     # (b) We can convert to raw bytes easily
     # (c) We could add additional information if we wanted
-    # Feel free to change SHA256 to a different value if more appropriate
     shared_hash = SHA256.new(bytes(str(shared_secret), "ascii")).hexdigest()
     return shared_hash
